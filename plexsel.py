@@ -24,10 +24,12 @@ class PlexSel:
 			"home" : '.HomeSourceLink-sourceLink-aaNRiO > div:nth-child(2) > div:nth-child(1)',
 			"firstExperience" :  '.FirstRunExperienceStep-stepButton-yDEnXT',
 			"startPlay" : 'button._76v8d68:nth-child(1)',
-			"activeFullscreen" : 'div._64atrd0:nth-child(2) > button:nth-child(1) > svg:nth-child(1)',
+			"activeFullscreen" : 'div._64atrd0:nth-child(2) > button:nth-child(1)',
 			"activeToMini" : '.FullPlayerTopControls-topControls-Fp11QH > div:nth-child(1) > button:nth-child(1) > svg:nth-child(1)',
 			"activeToMaxi" : '.MiniPlayerPoster-expandButton-FhcQi0 > svg:nth-child(1)',
-			"activePlayPause" : '.PlayerIconButton-isPrimary-VXE1Uo > svg:nth-child(1)',
+			"activePlayPause" : '.PlayerIconButton-isPrimary-VXE1Uo',
+			"startFromBeginning" : 'button.ListModalItem-listModalItem-yDiCT4:nth-child(2)',
+			"activeStop" : 'button.PlayerIconButton-playerButton-zDmEsI:nth-child(6) > svg:nth-child(1)'
 		}
 	
 	def __del__(self):
@@ -38,6 +40,11 @@ class PlexSel:
 		# Returns true if a button exists at this point in time
 		return len(self._driver.find_elements(By.CSS_SELECTOR, css_desc)) > 0
 	
+	def getButton(self, css_desc):
+		if self.buttonExists(css_desc):
+			return self._driver.find_element(By.CSS_SELECTOR, css_desc)
+		return None
+	
 	def buttonPress(self, css_desc):
 		# Presses a button if it exists
 		if not self.buttonExists(css_desc):
@@ -45,6 +52,15 @@ class PlexSel:
 		self._driver.find_elements(By.CSS_SELECTOR, css_desc)[0].click()
 		return True
 	
+	def timeoutGetButton(self, css_desc, timeout=15):
+		start = time.time()
+		now = start
+		button = self.getButton(css_desc)
+		while button is None and ((now - start) <= timeout):
+			button = self.getButton(css_desc)
+			now = time.time()
+		return button
+
 	def timeoutPress(self, css_desc, timeout=15):
 		# Waits for a button to exist and then presses it
 		start = time.time()
@@ -54,6 +70,9 @@ class PlexSel:
 			pressed = self.buttonPress(css_desc)
 			now = time.time()
 		return pressed
+
+	def getDriver(self):
+		return self._driver
 
 	def pressHome(self, timeout=15):
 		# Press the 'Home' button
@@ -66,9 +85,18 @@ class PlexSel:
 		while not self.pressHome(0):
 			self.timeoutPress(self._button_lookup["firstExperience"], 1)
 	
+	def startFromBeginning(self, timeout=15):
+		self.timeoutPress(self._button_lookup["startFromBeginning"], timeout)
+
 	def playMovie(self, timeout=15):
 		# Presses the "Play Movie" button to start playback
-		return self.timeoutPress(self._button_lookup["startPlay"], timeout)
+		button = self.timeoutGetButton(self._button_lookup["startPlay"])
+		if button is None:
+			return False
+		name = button.accessible_name
+		button.click()
+		if name == "Resume":
+			self.startFromBeginning()
 
 	def getMovieByIndex(self, index):
 		# Navigates to a movie's url. This uses the movie index from the plex server api
@@ -82,16 +110,59 @@ class PlexSel:
 		return self.buttonExists(self._button_lookup["activePlayPause"])
 
 	def currentlyPlaying(self):
-		# FIXME: Figure out wether or not the video is actually playing
-		while not self.buttonExists(self._button_lookup["activePlayPause"]):
-			time.sleep(1)
-		help(self._driver.find_elems(By.CSS_SELECTOR, self._button_lookup["activePlayPause"])[0])
+		# States if video is actively playing
+		button = self.timeoutGetButton(self._button_lookup["activePlayPause"]);
+		if button is None:
+			return False
+		# The button would be "Play" if it was Paused and "Pause" if it's playing
+		if button.accessible_name == "Pause":
+			return True
+		return False
+	
+	def activePlay(self):
+		if not self.currentlyActive() or self.currentlyPlaying():
+			return False
+		return self.timeoutPress(self._button_lookup["activePlayPause"])
+	
+	def activePause(self):
+		if self.currentlyPlaying():
+			return self.timeoutPress(self._button_lookup["activePlayPause"])
+		return False
+	
+	def activePlayPause(self):
+		if not self.currentlyActive():
+			return False
+		return self.timeoutPress(self._button_lookup["activePlayPause"])
+	
+	def activeStop(self):
+		if not self.currentlyActive():
+			return False
+		return self.timeoutPress(self._button_lookup["activeStop"])
 
 	def toggleFullscreen(self):
 		# Will toggle the fullscreen status of the movie
 		# TODO: need to figure out how to track fullscreen status
 		return self.timeoutPress(self._button_lookup["activeFullscreen"])
 	
+	def isActiveFullscreen(self):
+		button = self.getButton(self._button_lookup["activeFullscreen"])
+		if button is None:
+			return False
+		name = button.accessible_name
+		return name == "Exit Fullscreen"
+		# "Enter Fullscreen" is it's other name
+		
+	def activeFullscreen(self, setFullscreen=True):
+		if not self.currentlyActive():
+			return False
+		if setFullscreen and not self.isMaxi():
+			self.setMaxi()
+		if setFullscreen and not self.isActiveFullscreen():
+			return self.toggleFullscreen()
+		if not setFullscreen and self.isActiveFullscreen():
+			return self.toggleFullscreen()
+		return False
+
 	def isMini(self):
 		# Determines if there is a video active and we're in Mini Mode
 		return self.currentlyActive() and self.buttonExists(self._button_lookup["activeToMaxi"])
@@ -125,6 +196,8 @@ class PlexSel:
 		
 
 import json
+elem = None
+ps = None
 if __name__ == "__main__":
 	keys = {}
 	with open("keys.json") as f:
@@ -133,5 +206,5 @@ if __name__ == "__main__":
 	ps.start()
 	ps.getMovieByIndex(13224)
 	ps.playMovie()
-	while True:
-		time.sleep(1)
+	#time.sleep(10)
+	#elem = ps.currentlyPlaying()
