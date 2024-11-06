@@ -1,6 +1,7 @@
 from selenium import webdriver
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.common.by import By
+from selenium.webdriver.common.action_chains import ActionChains
 import time
 
 class PlexSel:
@@ -25,6 +26,7 @@ class PlexSel:
 			"firstExperience" :  '.FirstRunExperienceStep-stepButton-yDEnXT',
 			"startPlay" : 'button._76v8d68:nth-child(1)',
 			"activeFullscreen" : 'div._64atrd0:nth-child(2) > button:nth-child(1)',
+			"activeVideoArea" : '.PlayPauseOverlay-overlay-lF71cy',
 			"activeToMini" : '.FullPlayerTopControls-topControls-Fp11QH > div:nth-child(1) > button:nth-child(1) > svg:nth-child(1)',
 			"activeToMaxi" : '.MiniPlayerPoster-expandButton-FhcQi0 > svg:nth-child(1)',
 			"activePlayPause" : '.PlayerIconButton-isPrimary-VXE1Uo',
@@ -142,7 +144,12 @@ class PlexSel:
 	def toggleFullscreen(self):
 		# Will toggle the fullscreen status of the movie
 		# TODO: need to figure out how to track fullscreen status
-		return self.timeoutPress(self._button_lookup["activeFullscreen"])
+		button = self.timeoutGetButton(self._button_lookup["activeVideoArea"])
+		if button is None:
+			return False
+		action = ActionChains(self._driver)
+		action.double_click(on_element = button)
+		action.perform()
 	
 	def isActiveFullscreen(self):
 		button = self.getButton(self._button_lookup["activeFullscreen"])
@@ -168,6 +175,8 @@ class PlexSel:
 		return self.currentlyActive() and self.buttonExists(self._button_lookup["activeToMaxi"])
 
 	def toMini(self):
+		# FIXME: This is brokie cause the toMini button maynot be visible
+		return False
 		# Sets to mini mode if we're in maxi mode
 		if not self.isMaxi():
 			return False
@@ -181,7 +190,7 @@ class PlexSel:
 		# Sets to max mode
 		if not self.isMini():
 			return False
-		return timeoutPress(self._button_lookup["activeToMaxi"], 1)
+		return self.timeoutPress(self._button_lookup["activeToMaxi"], 1)
 
 	def toggleMaxi(self):
 		# Toggles player between mini and maxi
