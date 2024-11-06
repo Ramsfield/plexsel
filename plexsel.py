@@ -17,7 +17,7 @@ class PlexSel:
 		"""
 		self._url = f"{url}/web/index.html#!/"
 		self._driver = webdriver.Firefox()
-		self._movie_base = "server/68c19933a46b8e1f3261de1a9b0784cc8d160431/details?key=%2Flibrary%2Fmetadata%2F"
+		self._movie_base = movie_base
 
 		# The CSS Selector values for every button we may want to press
 		self._button_lookup = {
